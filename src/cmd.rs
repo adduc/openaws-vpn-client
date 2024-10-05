@@ -126,7 +126,24 @@ pub async fn connect_ovpn(
 
     let b = std::fs::canonicalize(temp_pwd).unwrap().to_path_buf();
 
-    let mut out = tokio::process::Command::new("pkexec")
+
+    // TEMPFIX: There appear to be some issues with openvpn not closing
+    // properly when the connection is lost. This is a temporary fix to
+    // kill any openvpn processes before starting a new one.
+    let _ = Command::new("sudo")
+        .arg("pkill")
+        .arg("openvpn")
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+
+    // log that pkill was run
+    log.append("pkill openvpn");
+
+    // TEMPFIX: run sudo instead of pkexec to avoid password prompt
+    // when visudo is configured to not require password for sudo
+    let mut out = tokio::process::Command::new("sudo")
         .arg(OPENVPN_FILE.as_str())
         .arg("--config")
         .arg(config)
@@ -207,7 +224,7 @@ pub fn kill_openvpn(pid: u32) {
                     && last.contains("--auth-user-pass /")
                     && last.ends_with("pwd.txt")
                 {
-                    let mut p = Command::new("pkexec")
+                    let mut p = Command::new("sudo")
                         .arg("kill")
                         .arg(format!("{}", pid))
                         .spawn()
